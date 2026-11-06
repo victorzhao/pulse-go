@@ -31,3 +31,9 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Pulse build output and test snapshots
+/build/
+/app/build/
+/dist/
+.mygo/

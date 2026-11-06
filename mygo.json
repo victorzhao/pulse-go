@@ -1,0 +1,7 @@
+{
+  "name": "Pulse",
+  "identifier": "com.easytech.pulse",
+  "version": "0.1.0",
+  "copyright": "Copyright © 2026 EasyTech",
+  "out": "build"
+}
