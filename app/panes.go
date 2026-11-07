@@ -21,184 +21,147 @@ type dragFiles struct {
 	FromStash bool
 }
 
-// panes lays out the active tab's panes.
+// panes lays out the two sides, each with its own tabs.
 func (a *App) panes(c *ui.Context, p Palette) ui.Element {
-	t := a.activeTab()
-	if t == nil {
-		return ui.Box(c)
-	}
-	a.ensurePanes(t)
-	switch t.Layout {
-	case layoutSplitH:
-		return ui.SplitPercent(c, &t.SplitA, func() {
-			a.pane(c, p, t, 0)
-		}, func() {
-			a.pane(c, p, t, 1)
-		})
-	case layoutSplitV:
-		return ui.SplitVerticalPercent(c, &t.SplitV, func() {
-			a.pane(c, p, t, 0)
-		}, func() {
-			a.pane(c, p, t, 1)
-		})
-	case layoutTriple:
-		return ui.SplitPercent(c, &t.SplitA, func() {
-			a.pane(c, p, t, 0)
-		}, func() {
-			ui.SplitPercent(c, &t.SplitB, func() {
-				a.pane(c, p, t, 1)
-			}, func() {
-				a.pane(c, p, t, 2)
-			})
-		})
-	case layoutQuad:
-		return ui.SplitVerticalPercent(c, &t.SplitV, func() {
-			ui.Row(c).Fill().Children(func() {
-				ui.SplitPercent(c, &t.SplitA, func() {
-					a.pane(c, p, t, 0)
-				}, func() {
-					a.pane(c, p, t, 1)
-				}).Grow(1)
-			})
-		}, func() {
-			ui.Row(c).Fill().Children(func() {
-				ui.SplitPercent(c, &t.SplitB, func() {
-					a.pane(c, p, t, 2)
-				}, func() {
-					a.pane(c, p, t, 3)
-				}).Grow(1)
-			})
-		})
-	default:
-		return a.pane(c, p, t, 0)
-	}
+	a.ensureSideDefaults()
+	return ui.SplitPercent(c, &a.splitPercent, func() {
+		a.sidePaneView(c, p, 0)
+	}, func() {
+		a.sidePaneView(c, p, 1)
+	})
 }
 
-// pane builds one folder pane with its header and file view.
-func (a *App) pane(c *ui.Context, p Palette, t *Tab, idx int) ui.Element {
-	pane := t.Panes[idx]
-	if pane == nil {
-		return ui.Box(c)
-	}
-	pane.viewTab, pane.viewIdx = t, idx
-	active := t.Active == idx
-	col := ui.Column(c).Fill().Clip()
-	col.Background(p.Panel)
+// sidePaneView builds one side: its tab strip, header and file view.
+func (a *App) sidePaneView(c *ui.Context, p Palette, idx int) ui.Element {
+	side := a.sideAt(idx)
+	pane := a.sidePane(idx)
+	active := a.activeSide == idx
+	col := ui.Column(c).Fill().Clip().Background(p.Panel)
 	if active {
 		col.BorderWidth(1, 1, 0, 1).BorderColor(p.Border)
 	} else {
 		col.BorderWidth(1, 0, 0, 0).BorderColor(p.BorderSoft)
 	}
 	col.Children(func() {
-		a.paneHeader(c, p, t, idx, pane, active)
-		body := ui.Column(c).Fill()
-		body.ContextMenu(func(m *ui.Menu) {
-			if pane.Virtual == virtualNone {
-				if m.Item(a.t("newFolder")).Shortcut(ui.Cmd|ui.Shift, ui.KeyN).Chosen() {
-					a.beginNewFolder(pane)
-				}
-				if m.Item(a.t("paste")).Shortcut(ui.Cmd, ui.KeyV).Disabled(len(a.stash.Items) == 0).Chosen() {
-					a.pasteStash()
-				}
-				m.Separator()
-			}
-			if m.Item(a.t("selectAll")).Shortcut(ui.Cmd, ui.KeyA).Chosen() {
-				a.selectAllRows(pane)
-			}
-			if m.Item(a.t("invertSelection")).Chosen() {
-				a.invertSelection(pane)
-			}
-			if m.Item(a.t("refresh")).Shortcut(0, ui.KeyF5).Chosen() {
-				a.refreshPane(pane)
-			}
-			m.Separator()
-			m.Submenu(a.t("view"), func(m *ui.Menu) {
-				if m.Item(a.t("viewDetails")).Radio(pane.View == viewDetails).Chosen() {
-					a.setPaneView(pane, viewDetails)
-				}
-				if m.Item(a.t("viewTiles")).Radio(pane.View == viewTiles).Chosen() {
-					a.setPaneView(pane, viewTiles)
-				}
-				if m.Item(a.t("viewIcons")).Radio(pane.View == viewIcons).Chosen() {
-					a.setPaneView(pane, viewIcons)
-				}
-				if m.Item(a.t("viewList")).Radio(pane.View == viewList).Chosen() {
-					a.setPaneView(pane, viewList)
-				}
-				if m.Item(a.t("viewContent")).Radio(pane.View == viewContent).Chosen() {
-					a.setPaneView(pane, viewContent)
-				}
-			})
-			if pane.Virtual == virtualTrash && len(pane.Entries) > 0 {
-				m.Separator()
-				if m.Item(a.t("emptyTrash")).Chosen() {
-					a.emptyTrash()
-				}
-			}
-		})
-		// Files dropped from the system land here.
-		opts := transfer.DropOptions{Formats: []transfer.Format{transfer.FileList}, Operations: transfer.Copy | transfer.Move}
-		_, overData := ui.DataDragOver(body, opts)
-		_, overDrag := ui.DragOver[dragFiles](body)
-		if overData || overDrag {
-			if overDrag {
-				pane.DropHint = 1
-			} else {
-				pane.DropHint = 2
-			}
-		} else if pane.DropHint != 0 && !overData && !overDrag {
-			pane.DropHint = 0
+		a.sideTabStrip(c, p, idx)
+		if pane == nil {
+			return
 		}
-		if drop, ok := ui.DropData(body, opts); ok {
-			if paths, err := drop.Data.Files(); err == nil && len(paths) > 0 {
-				move := drop.Operation == transfer.Move
-				a.dropFilesInto(pane, paths, move)
-			}
-			pane.DropHint = 0
-		}
-		if df, ok := ui.Drop[dragFiles](body); ok {
-			a.dropFilesInto(pane, df.Paths, df.Move)
-			if df.FromStash {
-				a.stash.Items = nil
-			}
-			pane.DropHint = 0
-		}
-		body.Children(func() {
-			switch pane.View {
-			case viewDetails:
-				a.detailsView(c, p, pane)
-			case viewTiles:
-				a.tilesView(c, p, pane, true)
-			case viewIcons:
-				a.tilesView(c, p, pane, false)
-			case viewList:
-				a.listView(c, p, pane)
-			case viewContent:
-				a.contentView(c, p, pane)
-			}
-			if pane.DropHint != 0 {
-				ui.Box(c).Fill().Background(ui.RGBA(0, 0, 0, 0.35)).Children(func() {
-					ui.Box(c).Attach(ui.AnchorCenter, ui.AnchorCenter).Padding(18, 26).Radius(12).
-						Background(p.PanelSolid).Border(1, p.Accent).Children(func() {
-						ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
-							ui.Icon(c, icon("download")).FontSize(28).TextColor(p.Accent)
-							msg := a.t("dropCopyHere")
-							if pane.DropHint == 2 {
-								msg = a.t("dropMoveHere")
-							}
-							ui.Text(c, msg).FontSize(13).TextColor(p.Text)
-							ui.Text(c, pane.Path).FontSize(11).TextColor(p.TextMuted).SingleLine()
-						})
-					})
-				})
-			}
-		})
+		pane.viewTab, pane.viewIdx = side, side.Active
+		a.paneHeader(c, p, pane, active)
+		a.paneBody(c, p, pane)
 	})
 	return col
 }
 
+// paneBody builds a pane's file view, drops and background menu.
+func (a *App) paneBody(c *ui.Context, p Palette, pane *Pane) {
+	body := ui.Column(c).Fill()
+	body.ContextMenu(func(m *ui.Menu) {
+		if pane.Virtual == virtualNone {
+			if m.Item(a.t("newFolder")).Shortcut(ui.Cmd|ui.Shift, ui.KeyN).Chosen() {
+				a.beginNewFolder(pane)
+			}
+			if m.Item(a.t("paste")).Shortcut(ui.Cmd, ui.KeyV).Disabled(len(a.stash.Items) == 0).Chosen() {
+				a.pasteStash()
+			}
+			m.Separator()
+		}
+		if m.Item(a.t("selectAll")).Shortcut(ui.Cmd, ui.KeyA).Chosen() {
+			a.selectAllRows(pane)
+		}
+		if m.Item(a.t("invertSelection")).Chosen() {
+			a.invertSelection(pane)
+		}
+		if m.Item(a.t("refresh")).Shortcut(0, ui.KeyF5).Chosen() {
+			a.refreshPane(pane)
+		}
+		m.Separator()
+		m.Submenu(a.t("view"), func(m *ui.Menu) {
+			if m.Item(a.t("viewDetails")).Radio(pane.View == viewDetails).Chosen() {
+				a.setPaneView(pane, viewDetails)
+			}
+			if m.Item(a.t("viewTiles")).Radio(pane.View == viewTiles).Chosen() {
+				a.setPaneView(pane, viewTiles)
+			}
+			if m.Item(a.t("viewIcons")).Radio(pane.View == viewIcons).Chosen() {
+				a.setPaneView(pane, viewIcons)
+			}
+			if m.Item(a.t("viewList")).Radio(pane.View == viewList).Chosen() {
+				a.setPaneView(pane, viewList)
+			}
+			if m.Item(a.t("viewContent")).Radio(pane.View == viewContent).Chosen() {
+				a.setPaneView(pane, viewContent)
+			}
+		})
+		if pane.Virtual == virtualTrash && len(pane.Entries) > 0 {
+			m.Separator()
+			if m.Item(a.t("emptyTrash")).Chosen() {
+				a.emptyTrash()
+			}
+		}
+	})
+	// Files dropped from the system land here.
+	opts := transfer.DropOptions{Formats: []transfer.Format{transfer.FileList}, Operations: transfer.Copy | transfer.Move}
+	_, overData := ui.DataDragOver(body, opts)
+	_, overDrag := ui.DragOver[dragFiles](body)
+	if overData || overDrag {
+		if overDrag {
+			pane.DropHint = 1
+		} else {
+			pane.DropHint = 2
+		}
+	} else if pane.DropHint != 0 && !overData && !overDrag {
+		pane.DropHint = 0
+	}
+	if drop, ok := ui.DropData(body, opts); ok {
+		if paths, err := drop.Data.Files(); err == nil && len(paths) > 0 {
+			move := drop.Operation == transfer.Move
+			a.dropFilesInto(pane, paths, move)
+		}
+		pane.DropHint = 0
+	}
+	if df, ok := ui.Drop[dragFiles](body); ok {
+		a.dropFilesInto(pane, df.Paths, df.Move)
+		if df.FromStash {
+			a.stash.Items = nil
+		}
+		pane.DropHint = 0
+	}
+	body.Children(func() {
+		switch pane.View {
+		case viewDetails:
+			a.detailsView(c, p, pane)
+		case viewTiles:
+			a.tilesView(c, p, pane, true)
+		case viewIcons:
+			a.tilesView(c, p, pane, false)
+		case viewList:
+			a.listView(c, p, pane)
+		case viewContent:
+			a.contentView(c, p, pane)
+		}
+		if pane.DropHint != 0 {
+			ui.Box(c).Fill().Background(ui.RGBA(0, 0, 0, 0.35)).Children(func() {
+				ui.Box(c).Attach(ui.AnchorCenter, ui.AnchorCenter).Padding(18, 26).Radius(12).
+					Background(p.PanelSolid).Border(1, p.Accent).Children(func() {
+					ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
+						ui.Icon(c, icon("download")).FontSize(28).TextColor(p.Accent)
+						msg := a.t("dropCopyHere")
+						if pane.DropHint == 2 {
+							msg = a.t("dropMoveHere")
+						}
+						ui.Text(c, msg).FontSize(13).TextColor(p.Text)
+						ui.Text(c, pane.Path).FontSize(11).TextColor(p.TextMuted).SingleLine()
+					})
+				})
+			})
+		}
+	})
+}
+
 // paneHeader draws a pane's name and view controls.
-func (a *App) paneHeader(c *ui.Context, p Palette, t *Tab, idx int, pane *Pane, active bool) {
+func (a *App) paneHeader(c *ui.Context, p Palette, pane *Pane, active bool) {
 	title := a.tabTitle(pane)
 	row := ui.Row(c).Height(34).Padding(0, 8).Gap(6)
 	row.Background(p.Panel)
@@ -207,8 +170,7 @@ func (a *App) paneHeader(c *ui.Context, p Palette, t *Tab, idx int, pane *Pane, 
 		if flatButton(c, p, 24, 24).Children(func() {
 			ui.Icon(c, icon("folder")).FontSize(15).TextColor(p.Accent)
 		}).Clicked() {
-			t.Active = idx
-			a.syncTabTitle()
+			a.activatePane(pane)
 		}
 		name := ui.Text(c, title).FontSize(13).Bold().SingleLine()
 		if active {
@@ -254,8 +216,7 @@ func (a *App) paneHeader(c *ui.Context, p Palette, t *Tab, idx int, pane *Pane, 
 	})
 	// Clicking the header makes its pane the active one.
 	row.OnClick(func() {
-		t.Active = idx
-		a.syncTabTitle()
+		a.activatePane(pane)
 	})
 }
 
@@ -505,8 +466,13 @@ func (a *App) activatePane(pane *Pane) {
 	}
 	if pane.viewTab.Active != pane.viewIdx {
 		pane.viewTab.Active = pane.viewIdx
-		a.syncTabTitle()
 	}
+	if pane.viewTab == a.right {
+		a.activeSide = 1
+	} else {
+		a.activeSide = 0
+	}
+	a.refreshWatchers()
 }
 
 // cleanName removes path separators from a typed name.

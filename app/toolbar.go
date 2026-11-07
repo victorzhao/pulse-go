@@ -212,33 +212,9 @@ func (a *App) toolbar(c *ui.Context, p Palette) {
 				}
 			})
 			ui.Spacer(c)
-			if len(a.tabs) > 0 {
-				if flatTextButton(c, p, a.t("compare"), 64, 26).Disabled(a.activeTab().Layout == layoutSingle).Clicked() {
-					a.startFolderCompare()
-				}
+			if flatTextButton(c, p, a.t("compare"), 64, 26).Clicked() {
+				a.startFolderCompare()
 			}
-			// Layout menu.
-			layoutIcon := "layout-single"
-			switch a.activeTab().Layout {
-			case layoutSplitH:
-				layoutIcon = "layout-h"
-			case layoutSplitV:
-				layoutIcon = "layout-v"
-			case layoutTriple:
-				layoutIcon = "layout-triple"
-			case layoutQuad:
-				layoutIcon = "layout-quad"
-			}
-			lb := toolbarButton(c, p, layoutIcon, a.t("layoutMenu"), false)
-			lb.PopoverMenu(func(m *ui.Menu) {
-				names := []string{a.t("layoutSingle"), a.t("layoutH"), a.t("layoutV"), a.t("layoutTriple"), a.t("layoutQuad")}
-				keys := []ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5}
-				for i := range names {
-					if m.Item(names[i]).Radio(int(a.activeTab().Layout) == i).Shortcut(ui.Cmd, keys[i]).Chosen() {
-						a.setLayout(layoutMode(i))
-					}
-				}
-			})
 			dt := toolbarButton(c, p, "details-pane", a.t("showDetails"), false)
 			if a.detailsOn {
 				dt.TextColor(p.Accent)

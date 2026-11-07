@@ -61,7 +61,6 @@ type ViewPrefs struct {
 	ComputeFolderSize bool    `json:"compute_folder_size"`
 	AutoRefresh       bool    `json:"auto_refresh"`
 	ShowDriveBars     bool    `json:"show_drive_bars"`
-	VerticalTabs      bool    `json:"vertical_tabs"`
 }
 
 // GeneralPrefs holds startup and integration settings.
@@ -106,8 +105,11 @@ type FolderPref struct {
 
 // Session is the last set of tabs.
 type Session struct {
-	Tabs   []TabState `json:"tabs"`
-	Active int        `json:"active"`
+	Version      int        `json:"version"`
+	Tabs         []TabState `json:"tabs"`
+	Active       int        `json:"active"`
+	ActiveSide   int        `json:"active_side"`
+	SplitPercent float32    `json:"split_percent"`
 }
 
 // TabState is one tab's layout and panes.

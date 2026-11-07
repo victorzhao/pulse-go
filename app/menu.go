@@ -27,19 +27,15 @@ func (a *App) SetupMenu() {
 			a.saveSessionSoon()
 		}},
 		mygo.Separator(),
+		{Label: a.t("focusLeftPane"), Accelerator: "CmdOrCtrl+Shift+Left", Click: func(*mygo.MenuItem, *mygo.Window) { a.focusSide(0) }},
+		{Label: a.t("focusRightPane"), Accelerator: "CmdOrCtrl+Shift+Right", Click: func(*mygo.MenuItem, *mygo.Window) { a.focusSide(1) }},
+		mygo.Separator(),
 		{Label: a.t("view"), Submenu: []*mygo.MenuItem{
 			{Label: a.t("viewDetails"), Accelerator: "Alt+1", Click: func(*mygo.MenuItem, *mygo.Window) { a.setView(viewDetails) }},
 			{Label: a.t("viewTiles"), Accelerator: "Alt+2", Click: func(*mygo.MenuItem, *mygo.Window) { a.setView(viewTiles) }},
 			{Label: a.t("viewIcons"), Accelerator: "Alt+3", Click: func(*mygo.MenuItem, *mygo.Window) { a.setView(viewIcons) }},
 			{Label: a.t("viewList"), Accelerator: "Alt+4", Click: func(*mygo.MenuItem, *mygo.Window) { a.setView(viewList) }},
 			{Label: a.t("viewContent"), Accelerator: "Alt+5", Click: func(*mygo.MenuItem, *mygo.Window) { a.setView(viewContent) }},
-		}},
-		{Label: a.t("layoutMenu"), Submenu: []*mygo.MenuItem{
-			{Label: a.t("layoutSingle"), Accelerator: "CmdOrCtrl+1", Click: func(*mygo.MenuItem, *mygo.Window) { a.setLayout(layoutSingle) }},
-			{Label: a.t("layoutH"), Accelerator: "CmdOrCtrl+2", Click: func(*mygo.MenuItem, *mygo.Window) { a.setLayout(layoutSplitH) }},
-			{Label: a.t("layoutV"), Accelerator: "CmdOrCtrl+3", Click: func(*mygo.MenuItem, *mygo.Window) { a.setLayout(layoutSplitV) }},
-			{Label: a.t("layoutTriple"), Accelerator: "CmdOrCtrl+4", Click: func(*mygo.MenuItem, *mygo.Window) { a.setLayout(layoutTriple) }},
-			{Label: a.t("layoutQuad"), Accelerator: "CmdOrCtrl+5", Click: func(*mygo.MenuItem, *mygo.Window) { a.setLayout(layoutQuad) }},
 		}},
 		mygo.Separator(),
 		{Label: a.t("showHidden"), Type: mygo.MenuItemCheckbox, Checked: a.cfg.View.ShowHidden, Click: func(item *mygo.MenuItem, w *mygo.Window) {
@@ -83,7 +79,7 @@ func (a *App) SetupMenu() {
 		{Label: a.t("newTab"), Accelerator: "CmdOrCtrl+T", Click: func(*mygo.MenuItem, *mygo.Window) { a.newTabHere() }},
 		{Label: a.t("newFolder"), Accelerator: "CmdOrCtrl+Shift+N", Click: func(*mygo.MenuItem, *mygo.Window) { a.beginNewFolder(a.activePane()) }},
 		{Label: a.t("newFile"), Click: func(*mygo.MenuItem, *mygo.Window) { a.beginNewFile(a.activePane()) }},
-		{Label: a.t("closeTab"), Accelerator: "CmdOrCtrl+W", Click: func(*mygo.MenuItem, *mygo.Window) { a.closeTab(a.tab) }},
+		{Label: a.t("closeTab"), Accelerator: "CmdOrCtrl+W", Click: func(*mygo.MenuItem, *mygo.Window) { a.closeActiveSideTab() }},
 		mygo.Separator(),
 		{Label: a.t("open"), Accelerator: "CmdOrCtrl+O", Click: func(*mygo.MenuItem, *mygo.Window) { a.openSelectedEntry() }},
 		{Label: a.t("openNewTab"), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSelectedInNewTab() }},

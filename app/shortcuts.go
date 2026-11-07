@@ -21,7 +21,7 @@ func (a *App) handleShortcuts(c *ui.Context) {
 		a.newTabHere()
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyW) {
-		a.closeTab(a.tab)
+		a.closeActiveSideTab()
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyL) {
 		a.focusAddress()
@@ -48,11 +48,11 @@ func (a *App) handleShortcuts(c *ui.Context) {
 		a.cfg.View.ShowDetails = a.detailsOn
 		a.saveSessionSoon()
 	}
-	layoutKeys := []ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5}
-	for i, k := range layoutKeys {
-		if c.Shortcut(ui.Cmd, k) {
-			a.setLayout(layoutMode(i))
-		}
+	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyLeft) {
+		a.focusSide(0)
+	}
+	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyRight) {
+		a.focusSide(1)
 	}
 	viewKeys := []ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5}
 	views := []viewMode{viewDetails, viewTiles, viewIcons, viewList, viewContent}
@@ -71,10 +71,16 @@ func (a *App) handleShortcuts(c *ui.Context) {
 		a.goUp(pane)
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyPageDown) {
-		a.selectTab((a.tab + 1) % len(a.tabs))
+		side := a.activeTab()
+		if side != nil && len(side.Panes) > 0 {
+			a.selectSideTab(a.activeSide, (side.Active+1)%len(side.Panes))
+		}
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyPageUp) {
-		a.selectTab((a.tab - 1 + len(a.tabs)) % len(a.tabs))
+		side := a.activeTab()
+		if side != nil && len(side.Panes) > 0 {
+			a.selectSideTab(a.activeSide, (side.Active-1+len(side.Panes))%len(side.Panes))
+		}
 	}
 	if pane != nil {
 		if c.Shortcut(0, ui.KeyF2) && pane.View != viewDetails {

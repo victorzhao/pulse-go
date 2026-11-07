@@ -188,12 +188,14 @@ func (a *App) startWatcher(p *Pane, dir string, gen int) {
 
 // paneInActiveTab reports whether a pane belongs to the tab shown.
 func (a *App) paneInActiveTab(p *Pane) bool {
-	t := a.activeTab()
-	if t == nil {
-		return false
-	}
-	for _, pane := range t.Panes {
-		if pane == p {
+	for _, t := range []*Tab{a.left, a.right} {
+		if t == nil || len(t.Panes) == 0 {
+			continue
+		}
+		if t.Active < 0 || t.Active >= len(t.Panes) {
+			t.Active = 0
+		}
+		if t.Panes[t.Active] == p {
 			return true
 		}
 	}
@@ -202,22 +204,25 @@ func (a *App) paneInActiveTab(p *Pane) bool {
 
 // refreshWatchers watches the active tab's folders and stops the others.
 func (a *App) refreshWatchers() {
-	for _, t := range a.tabs {
+	for _, t := range []*Tab{a.left, a.right} {
+		if t == nil {
+			continue
+		}
 		for _, p := range t.Panes {
-			if p.watchCancel != nil {
-				p.watchCancel()
-				p.watchCancel = nil
-			}
+			a.stopPaneWatcher(p)
 		}
 	}
 	if a.Win == nil || !a.cfg.View.AutoRefresh {
 		return
 	}
-	t := a.activeTab()
-	if t == nil {
-		return
-	}
-	for _, p := range t.Panes {
+	for _, t := range []*Tab{a.left, a.right} {
+		if t == nil || len(t.Panes) == 0 {
+			continue
+		}
+		if t.Active < 0 || t.Active >= len(t.Panes) {
+			t.Active = 0
+		}
+		p := t.Panes[t.Active]
 		if p.Virtual == virtualNone && p.Path != "" && !p.Loading {
 			a.startWatcher(p, p.Path, p.Gen)
 		}
@@ -632,25 +637,10 @@ func (a *App) revealEntry(p *Pane, e fsx.Entry) {
 }
 
 // updateTabTitle makes the tab's title follow its active pane.
-func (a *App) updateTabTitle(p *Pane) {
-	for _, t := range a.tabs {
-		for _, pane := range t.Panes {
-			if pane == p {
-				t.Title = a.tabTitle(p)
-				return
-			}
-		}
-	}
-}
+func (a *App) updateTabTitle(p *Pane) {}
 
 // syncTabTitle refreshes the active tab's title.
-func (a *App) syncTabTitle() {
-	t := a.activeTab()
-	if t == nil {
-		return
-	}
-	t.Title = a.tabTitle(t.Panes[t.Active])
-}
+func (a *App) syncTabTitle() {}
 
 // setPaneView changes a pane's view and remembers it.
 func (a *App) setPaneView(p *Pane, v viewMode) {
@@ -930,11 +920,11 @@ func (a *App) openSearchTab(query, root string, results []fsx.Entry) {
 	p.Path = root
 	p.History = nil
 	p.HistAt = 0
-	t := &Tab{Layout: layoutSingle, Active: 0, Panes: []*Pane{p}, SplitA: 50, SplitB: 50, SplitV: 50}
-	t.Title = a.t("tabSearch")
-	a.tabs = append(a.tabs, t)
-	a.tab = len(a.tabs) - 1
+	side := a.sideAt(a.activeSide)
+	side.Panes = append(side.Panes, p)
+	side.Active = len(side.Panes) - 1
 	a.applyPane(p)
+	a.refreshWatchers()
 	a.saveSessionSoon()
 }
 

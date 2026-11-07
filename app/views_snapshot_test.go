@@ -62,23 +62,23 @@ func TestViewsSnapshots(t *testing.T) {
 
 func TestLayoutSnapshot(t *testing.T) {
 	a := testApp(t)
-	tb := a.activeTab()
-	p1 := tb.Panes[0]
+	p := a.activePane()
+	right := a.sideAt(1)
 	p2 := &Pane{
-		Path:     p1.Path,
+		Path:     p.Path,
 		View:     viewTiles,
-		SortBy:   "name",
+		SortBy:   p.SortBy,
 		Selected: -1,
 		Sizes:    map[string]int64{},
 		Compare:  map[string]compareMark{},
 	}
-	p2.Entries = p1.Entries
+	p2.Entries = p.Entries
 	p2.History = []string{p2.Path}
-	tb.Panes = append(tb.Panes, p2)
-	tb.Layout = layoutSplitH
-	tb.Active = 1
+	right.Panes = []*Pane{p2}
+	right.Active = 0
+	a.activeSide = 1
 	a.applyPane(p2)
-	snapshot(t, a, "layout-split")
+	snapshot(t, a, "two-panes")
 }
 
 func TestSettingsSnapshot(t *testing.T) {
@@ -101,13 +101,6 @@ func TestSearchSnapshot(t *testing.T) {
 	}
 	a.search.Selected = 0
 	snapshot(t, a, "search")
-}
-
-func TestVerticalTabsSnapshot(t *testing.T) {
-	a := testApp(t)
-	a.cfg.View.VerticalTabs = true
-	a.sidebarOn = true
-	snapshot(t, a, "vertical-tabs")
 }
 
 func TestWallpaperSnapshot(t *testing.T) {

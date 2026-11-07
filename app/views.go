@@ -129,22 +129,8 @@ func (a *App) tableColumns(pane *Pane, narrow bool) []ui.TableColumn {
 	return out
 }
 
-// paneNarrow estimates whether a pane has room for every column.
+// paneNarrow estimates whether a side has room for every column.
 func (a *App) paneNarrow(c *ui.Context) bool {
-	t := a.activeTab()
-	if t == nil {
-		return false
-	}
-	n := len(t.Panes)
-	if t.Layout == layoutSingle {
-		n = 1
-	} else if t.Layout == layoutTriple {
-		n = 3
-	} else if t.Layout == layoutQuad {
-		n = 4
-	} else {
-		n = 2
-	}
 	w, _ := c.Size()
 	if a.sidebarOn {
 		w -= a.sidebarWidth
@@ -152,13 +138,7 @@ func (a *App) paneNarrow(c *ui.Context) bool {
 	if a.detailsOn {
 		w -= w * (100 - a.detailsPercent) / 100
 	}
-	per := w / float32(n)
-	return per < 520
-}
-
-// tableLayout returns the saved column order and widths of a pane.
-func (a *App) tableLayout(pane *Pane) ui.TableLayout {
-	return pane.List.Columns
+	return w/2 < 520
 }
 
 // maxEntrySize returns the largest size shown, for size bars.

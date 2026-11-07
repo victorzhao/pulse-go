@@ -226,7 +226,6 @@ func (a *App) viewSettings(c *ui.Context, p Palette) {
 		if ui.Checkbox(c, &a.cfg.View.AutoRefresh, a.t("autoRefresh")).Changed() {
 			a.refreshWatchers()
 		}
-		ui.Checkbox(c, &a.cfg.View.VerticalTabs, a.t("verticalTabs"))
 		ui.Checkbox(c, &a.cfg.View.ShowDriveBars, a.t("driveBars"))
 		ui.Checkbox(c, &a.cfg.View.ConfirmDelete, a.t("confirmDelete"))
 		if ui.Checkbox(c, &a.detailsOn, a.t("showDetails")).Changed() {
@@ -309,7 +308,8 @@ func (a *App) aboutSettings(c *ui.Context, p Palette) {
 				{"Ctrl+A", a.t("shortcutSelectAll")},
 				{"Ctrl+C / Ctrl+X", a.t("shortcutCopy") + " / " + a.t("shortcutCut")},
 				{"Ctrl+V", a.t("shortcutPaste")},
-				{"Ctrl+1…5", a.t("shortcutLayouts")},
+				{"Ctrl+PageDown / Ctrl+PageUp", a.t("shortcutNextTab") + " / " + a.t("shortcutPrevTab")},
+				{"Ctrl+Shift+← / Ctrl+Shift+→", a.t("focusLeftPane") + " / " + a.t("focusRightPane")},
 				{"Ctrl+B", a.t("shortcutSidebar")},
 				{"Ctrl+D", a.t("shortcutDetails")},
 				{"Alt+1…5", a.t("shortcutViews")},

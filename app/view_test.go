@@ -78,8 +78,22 @@ func testApp(t *testing.T) *App {
 	}
 	p.Entries = entries
 	p.History = []string{p.Path}
-	a.tabs = []*Tab{{Title: "Demo", Layout: layoutSingle, Panes: []*Pane{p}, SplitA: 50, SplitB: 50, SplitV: 50}}
-	a.tab = 0
+	p2 := &Pane{
+		Path:     p.Path,
+		View:     p.View,
+		SortBy:   p.SortBy,
+		Group:    p.Group,
+		Selected: -1,
+		Sizes:    map[string]int64{},
+		Compare:  map[string]compareMark{},
+	}
+	p2.Entries = p.Entries
+	p2.History = []string{p2.Path}
+	a.applyPane(p2)
+	a.left = &Tab{Active: 0, Panes: []*Pane{p}}
+	a.right = &Tab{Active: 0, Panes: []*Pane{p2}}
+	a.activeSide = 0
+	a.splitPercent = 50
 	a.cfg.TagAssignments[p.Entries[5].Path] = "design"
 	a.applyPane(p)
 	return a

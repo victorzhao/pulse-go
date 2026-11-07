@@ -35,9 +35,6 @@ func (a *App) trashSummary() (int, int64) {
 func (a *App) sidebar(c *ui.Context, p Palette) {
 	col := ui.Column(c).Fill().Clip().Background(p.Panel).BorderWidth(0, 1, 0, 0).BorderColor(p.BorderSoft)
 	col.Children(func() {
-		if a.verticalTabs() {
-			a.verticalTabList(c, p)
-		}
 		ui.Scroll(c).Grow(1).Padding(6).Gap(1).Children(func() {
 			for _, id := range a.side.order {
 				switch id {

@@ -57,17 +57,6 @@ func viewKey(v viewMode) string {
 	return "details"
 }
 
-// layoutMode is one of the pane layouts.
-type layoutMode int
-
-const (
-	layoutSingle layoutMode = iota
-	layoutSplitH
-	layoutSplitV
-	layoutTriple
-	layoutQuad
-)
-
 // virtualKind marks a pane showing a folder Pulse makes up rather than one
 // on disk.
 type virtualKind int
@@ -160,15 +149,10 @@ type compareMark struct {
 	Status int // 1 left only, 2 right only, 3 newer, 4 different, 5 same
 }
 
-// Tab is one window tab with its own layout and panes.
+// Tab holds one side's folder tabs and the one shown.
 type Tab struct {
-	Title  string
-	Layout layoutMode
 	Active int
 	Panes  []*Pane
-	SplitA float32
-	SplitB float32
-	SplitV float32
 }
 
 // App is the whole UI state.
@@ -180,8 +164,10 @@ type App struct {
 	locale     string
 	systemDark bool
 
-	tabs []*Tab
-	tab  int
+	left         *Tab
+	right        *Tab
+	activeSide   int
+	splitPercent float32
 
 	sidebarOn      bool
 	sidebarWidth   float32
@@ -318,59 +304,107 @@ func New(win *mygo.Window) *App {
 	return a
 }
 
-// initSession restores the saved tabs, or starts with one tab.
+// initSession restores both sides' tabs, or starts with one tab each.
 func (a *App) initSession() {
+	a.splitPercent = 50
+	a.activeSide = 0
+	restored := false
 	if a.cfg.General.RestoreTabs && len(a.cfg.Session.Tabs) > 0 {
-		for _, ts := range a.cfg.Session.Tabs {
-			t := &Tab{Title: ts.Title, Layout: layoutMode(ts.Layout), Active: ts.Active, SplitA: 50, SplitB: 50, SplitV: 50}
-			if t.Active < 0 || t.Active >= len(ts.Panes) {
-				t.Active = 0
+		if a.cfg.Session.Version >= 2 {
+			a.left = a.tabFromState(a.cfg.Session.Tabs[0])
+			if len(a.cfg.Session.Tabs) > 1 {
+				a.right = a.tabFromState(a.cfg.Session.Tabs[1])
+			} else {
+				a.right = a.defaultSide()
 			}
-			for _, ps := range ts.Panes {
-				p := &Pane{
-					Path:     ps.Path,
-					View:     parseView(ps.View),
-					SortBy:   ps.SortBy,
-					SortDesc: ps.SortDesc,
-					Group:    ps.Group,
-					Selected: -1,
-					Sizes:    map[string]int64{},
-					Compare:  map[string]compareMark{},
+			if a.cfg.Session.ActiveSide == 1 {
+				a.activeSide = 1
+			}
+		} else {
+			// An earlier session had global tabs: put all their panes on the
+			// left side and start the right side fresh.
+			a.left = &Tab{}
+			activeAt := 0
+			for i, ts := range a.cfg.Session.Tabs {
+				if i == a.cfg.Session.Active {
+					activeAt = len(a.left.Panes) + ts.Active
 				}
-				p.List.DragSelect = true
-				t.Panes = append(t.Panes, p)
+				t := a.tabFromState(ts)
+				a.left.Panes = append(a.left.Panes, t.Panes...)
 			}
-			if len(t.Panes) == 0 {
-				p := a.newPane(a.defaultPath())
-				t.Panes = []*Pane{p}
-			}
-			if t.Title == "" {
-				t.Title = a.tabTitle(t.Panes[t.Active])
-			}
-			a.tabs = append(a.tabs, t)
+			a.left.Active = activeAt
+			a.right = a.defaultSide()
 		}
-		a.tab = a.cfg.Session.Active
-		if a.tab < 0 || a.tab >= len(a.tabs) {
-			a.tab = 0
+		if a.cfg.Session.SplitPercent > 0 {
+			a.splitPercent = a.cfg.Session.SplitPercent
 		}
-		for _, t := range a.tabs {
-			for _, p := range t.Panes {
-				if p.Path == "" {
-					p.Path = a.defaultPath()
-				}
-				p.History = []string{p.Path}
-				p.HistAt = 0
-				a.loadPane(p)
-			}
-		}
-		return
+		restored = true
 	}
+	if !restored {
+		a.left = a.defaultSide()
+		a.right = a.defaultSide()
+	}
+	a.ensureSideDefaults()
+	for _, t := range []*Tab{a.left, a.right} {
+		for _, p := range t.Panes {
+			a.loadPane(p)
+		}
+	}
+}
+
+// tabFromState builds one side from a saved tab state.
+func (a *App) tabFromState(ts store.TabState) *Tab {
+	t := &Tab{Active: ts.Active}
+	for _, ps := range ts.Panes {
+		p := &Pane{
+			Path:     ps.Path,
+			View:     parseView(ps.View),
+			SortBy:   ps.SortBy,
+			SortDesc: ps.SortDesc,
+			Group:    ps.Group,
+			Selected: -1,
+			Sizes:    map[string]int64{},
+			Compare:  map[string]compareMark{},
+		}
+		p.List.DragSelect = true
+		if p.Path == "" {
+			p.Path = a.defaultPath()
+		}
+		p.History = []string{p.Path}
+		p.HistAt = 0
+		t.Panes = append(t.Panes, p)
+	}
+	return t
+}
+
+// defaultSide makes a side with one tab at the default location.
+func (a *App) defaultSide() *Tab {
 	p := a.newPane(a.defaultPath())
-	t := &Tab{Layout: layoutSingle, Active: 0, Panes: []*Pane{p}, SplitA: 50, SplitB: 50, SplitV: 50}
-	t.Title = a.tabTitle(p)
-	a.tabs = []*Tab{t}
-	a.tab = 0
-	a.loadPane(p)
+	return &Tab{Active: 0, Panes: []*Pane{p}}
+}
+
+// ensureSideDefaults keeps both sides with a tab and a valid choice.
+func (a *App) ensureSideDefaults() {
+	if a.left == nil {
+		a.left = a.defaultSide()
+	}
+	if a.right == nil {
+		a.right = a.defaultSide()
+	}
+	for _, t := range []*Tab{a.left, a.right} {
+		if len(t.Panes) == 0 {
+			t.Panes = append(t.Panes, a.newPane(a.defaultPath()))
+		}
+		if t.Active < 0 || t.Active >= len(t.Panes) {
+			t.Active = 0
+		}
+	}
+	if a.activeSide != 0 && a.activeSide != 1 {
+		a.activeSide = 0
+	}
+	if a.splitPercent <= 0 || a.splitPercent >= 100 {
+		a.splitPercent = 50
+	}
 }
 
 // SetIcon keeps the app icon, for the window and the tray.
@@ -414,11 +448,6 @@ func (a *App) applyTray() {
 		a.tray.Destroy()
 		a.tray = nil
 	}
-}
-
-// verticalTabs reports whether tabs show in the sidebar.
-func (a *App) verticalTabs() bool {
-	return a.cfg.View.VerticalTabs && a.sidebarOn
 }
 
 // ShowSearch shows the window and opens the global search dialog, as the
@@ -499,18 +528,26 @@ func (a *App) newPane(path string) *Pane {
 	return p
 }
 
-// activeTab returns the tab shown.
-func (a *App) activeTab() *Tab {
-	if a.tab < 0 || a.tab >= len(a.tabs) {
-		if len(a.tabs) == 0 {
-			return nil
+// sideAt returns one side's tab container.
+func (a *App) sideAt(idx int) *Tab {
+	if idx == 1 {
+		if a.right == nil {
+			a.right = a.defaultSide()
 		}
-		a.tab = 0
+		return a.right
 	}
-	return a.tabs[a.tab]
+	if a.left == nil {
+		a.left = a.defaultSide()
+	}
+	return a.left
 }
 
-// activePane returns the pane that commands act on.
+// activeTab returns the tab container of the side commands act on.
+func (a *App) activeTab() *Tab {
+	return a.sideAt(a.activeSide)
+}
+
+// activePane returns the tab that commands act on.
 func (a *App) activePane() *Pane {
 	t := a.activeTab()
 	if t == nil || len(t.Panes) == 0 {
@@ -520,6 +557,28 @@ func (a *App) activePane() *Pane {
 		t.Active = 0
 	}
 	return t.Panes[t.Active]
+}
+
+// focusSide makes one side the active one.
+func (a *App) focusSide(idx int) {
+	if idx != 0 && idx != 1 {
+		return
+	}
+	a.activeSide = idx
+	a.refreshWatchers()
+	a.saveSessionSoon()
+}
+
+// allPanes returns every tab of both sides.
+func (a *App) allPanes() []*Pane {
+	var out []*Pane
+	for _, t := range []*Tab{a.left, a.right} {
+		if t == nil {
+			continue
+		}
+		out = append(out, t.Panes...)
+	}
+	return out
 }
 
 // tabTitle derives a tab's title from its active pane.
@@ -670,14 +729,6 @@ func (a *App) titleBar(c *ui.Context, p Palette) {
 				a.saveSessionSoon()
 			}
 		})
-		if !a.verticalTabs() {
-			a.tabStrip(c, p)
-		}
-		if flatButton(c, p, 30, 26).Children(func() {
-			ui.Icon(c, icon("plus")).FontSize(15).TextColor(p.TextMuted)
-		}).Tooltip(a.t("newTab")).Label(a.t("newTab")).Clicked() {
-			a.newTabHere()
-		}
 		ui.Spacer(c)
 		if flatButton(c, p, 30, 26).Children(func() {
 			ui.Icon(c, icon("settings")).FontSize(15).TextColor(p.TextMuted)
@@ -842,103 +893,39 @@ func (a *App) newTabHere() {
 	a.newTab(path)
 }
 
-// newTab opens a tab at path.
+// newTab opens a tab at path on the active side.
 func (a *App) newTab(path string) {
-	p := a.newPane(path)
-	t := &Tab{Layout: layoutSingle, Active: 0, Panes: []*Pane{p}, SplitA: 50, SplitB: 50, SplitV: 50}
-	t.Title = a.tabTitle(p)
-	a.tabs = append(a.tabs, t)
-	a.tab = len(a.tabs) - 1
-	a.loadPane(p)
-	a.refreshWatchers()
-	a.saveSessionSoon()
+	a.newSideTab(a.activeSide, path)
 }
 
-// closeTab closes the tab at index i, keeping at least one.
+// closeTab closes the tab at index i on the active side.
 func (a *App) closeTab(i int) {
-	if len(a.tabs) <= 1 {
-		return
-	}
-	if i < 0 || i >= len(a.tabs) {
-		return
-	}
-	a.tabs = append(a.tabs[:i], a.tabs[i+1:]...)
-	if a.tab >= len(a.tabs) {
-		a.tab = len(a.tabs) - 1
-	}
-	if a.tab < 0 {
-		a.tab = 0
-	}
-	a.saveSessionSoon()
+	a.closeSideTab(a.activeSide, i)
 }
 
-// selectTab shows tab i.
+// selectTab shows tab i on the active side.
 func (a *App) selectTab(i int) {
-	if i < 0 || i >= len(a.tabs) {
-		return
-	}
-	a.tab = i
-	a.refreshWatchers()
-	a.saveSessionSoon()
+	a.selectSideTab(a.activeSide, i)
 }
 
-// setLayout changes the active tab's layout, creating panes as needed.
-func (a *App) setLayout(m layoutMode) {
-	t := a.activeTab()
-	if t == nil {
-		return
-	}
-	t.Layout = m
-	need := 1
-	switch m {
-	case layoutSplitH, layoutSplitV:
-		need = 2
-	case layoutTriple:
-		need = 3
-	case layoutQuad:
-		need = 4
-	}
-	for len(t.Panes) < need {
-		path := t.Panes[len(t.Panes)-1].Path
-		if path == "" {
-			path = a.defaultPath()
-		}
-		p := a.newPane(path)
-		t.Panes = append(t.Panes, p)
-		a.loadPane(p)
-	}
-	if t.Active >= need {
-		t.Active = 0
-	}
-	if t.SplitA == 0 {
-		t.SplitA = 50
-	}
-	a.saveSessionSoon()
+// closeOtherTabs keeps only tab i on the active side.
+func (a *App) closeOtherTabs(i int) {
+	a.closeSideOtherTabs(a.activeSide, i)
 }
 
-// ensurePanes makes a tab's panes match its layout.
-func (a *App) ensurePanes(t *Tab) {
-	if t == nil {
-		return
-	}
-	need := 1
-	switch t.Layout {
-	case layoutSplitH, layoutSplitV:
-		need = 2
-	case layoutTriple:
-		need = 3
-	case layoutQuad:
-		need = 4
-	}
-	for len(t.Panes) < need {
-		path := a.defaultPath()
-		if len(t.Panes) > 0 && t.Panes[len(t.Panes)-1].Path != "" {
-			path = t.Panes[len(t.Panes)-1].Path
-		}
-		p := a.newPane(path)
-		t.Panes = append(t.Panes, p)
-		a.loadPane(p)
-	}
+// closeTabsRight closes the tabs after i on the active side.
+func (a *App) closeTabsRight(i int) {
+	a.closeSideTabsRight(a.activeSide, i)
+}
+
+// closeTabsLeft closes the tabs before i on the active side.
+func (a *App) closeTabsLeft(i int) {
+	a.closeSideTabsLeft(a.activeSide, i)
+}
+
+// moveTab moves tab from before tab to on the active side.
+func (a *App) moveTab(from, to int) {
+	a.moveSideTab(a.activeSide, from, to)
 }
 
 // saveSessionSoon saves the session and settings after a change.
@@ -949,7 +936,8 @@ func (a *App) saveSessionSoon() {
 	a.SaveSession()
 }
 
-// SaveSession writes the tabs and view state to the configuration.
+// SaveSession writes both sides' tabs and the view state to the
+// configuration.
 func (a *App) SaveSession() {
 	if a.cfg == nil {
 		return
@@ -957,9 +945,14 @@ func (a *App) SaveSession() {
 	if a.cfg.FolderPrefs == nil {
 		a.cfg.FolderPrefs = map[string]store.FolderPref{}
 	}
-	s := store.Session{Active: a.tab}
-	for _, t := range a.tabs {
-		ts := store.TabState{Title: t.Title, Layout: int(t.Layout), Active: t.Active}
+	a.ensureSideDefaults()
+	s := store.Session{Version: 2, ActiveSide: a.activeSide, SplitPercent: a.splitPercent}
+	for _, t := range []*Tab{a.left, a.right} {
+		if t == nil {
+			s.Tabs = append(s.Tabs, store.TabState{})
+			continue
+		}
+		ts := store.TabState{Active: t.Active}
 		for _, p := range t.Panes {
 			if p.Virtual == virtualNone && p.Path != "" {
 				a.cfg.FolderPrefs[store.FolderKey(p.Path)] = a.folderPrefFromPane(p)

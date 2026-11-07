@@ -252,10 +252,8 @@ func (a *App) searchModal(c *ui.Context, p Palette) {
 					if ui.Button(c, a.t("stop")).Clicked() {
 						a.stopSearch()
 					}
-				} else {
-					if ui.PrimaryButton(c, a.t("startSearch")).Clicked() {
-						a.startSearch()
-					}
+				} else if ui.PrimaryButton(c, a.t("startSearch")).Clicked() {
+					a.startSearch()
 				}
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -306,63 +304,6 @@ func (a *App) searchModal(c *ui.Context, p Palette) {
 					a.search.Tag = ""
 				}
 				ui.Spacer(c)
-			})
-			if a.search.Searching {
-					if ui.Button(c, a.t("stop")).Clicked() {
-						a.stopSearch()
-					}
-				} else {
-					if ui.PrimaryButton(c, a.t("startSearch")).Clicked() {
-						a.startSearch()
-					}
-				}
-			})
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				scope := a.search.Scope
-				if ui.Segmented(c, &scope, a.t("currentFolder"), a.t("thisPC"), a.t("pickedFolder")).Changed() {
-					a.search.Scope = scope
-				}
-				ui.Text(c, a.scopeLabel()).FontSize(10).TextColor(p.TextMuted).SingleLine()
-				if a.search.Scope == 2 {
-					if ui.Button(c, a.t("browse")).FontSize(10).Height(22).Clicked() {
-						paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.Win, Title: a.t("searchFolderPicker"), Directory: true})
-						if err == nil && len(paths) > 0 {
-							a.search.Root = paths[0]
-						}
-					}
-				}
-				ui.Text(c, a.t("searchTagsLabel")).FontSize(10).TextColor(p.TextMuted)
-				tagLabel := a.t("anyTag")
-				for _, tag := range a.cfg.Tags {
-					if tag.ID == a.search.Tag {
-						tagLabel = tag.Name
-					}
-				}
-				tagOptions := []string{a.t("anyTag")}
-				for _, tag := range a.cfg.Tags {
-					tagOptions = append(tagOptions, tag.Name)
-				}
-				ui.Select(c, &tagLabel, tagOptions).Width(120)
-				if tagLabel != a.t("anyTag") {
-					a.search.Tag = a.tagIDByName(tagLabel)
-				} else {
-					a.search.Tag = ""
-				}
-				ui.Spacer(c)
-				hidden := a.search.Hidden
-				if ui.Checkbox(c, &hidden, a.t("includeHidden")).Changed() {
-					a.search.Hidden = hidden
-				}
-				sub := a.search.Subfolders
-				if ui.Checkbox(c, &sub, a.t("includeSubfolders")).Changed() {
-					a.search.Subfolders = sub
-				}
-				if ui.Button(c, a.t("advancedSearch")).Clicked() {
-					a.advanced.Open = true
-					a.advanced.Query = a.search.Query
-					a.advanced.Scope = a.search.Scope
-					a.advanced.Root = a.search.Root
-				}
 			})
 			if a.search.Searching {
 				ui.Row(c).Gap(8).Children(func() {
@@ -420,10 +361,8 @@ func (a *App) searchModal(c *ui.Context, p Palette) {
 						}
 					})
 				}).Grow(1)
-				if list.Submitted() {
-					if a.search.Selected >= 0 && a.search.Selected < len(a.search.Results) {
-						a.openSearchResult(a.search.Results[a.search.Selected])
-					}
+				if list.Submitted() && a.search.Selected >= 0 && a.search.Selected < len(a.search.Results) {
+					a.openSearchResult(a.search.Results[a.search.Selected])
 				}
 			}
 			ui.Row(c).Gap(8).Children(func() {

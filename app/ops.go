@@ -485,11 +485,9 @@ func (a *App) emptyTrash() {
 
 // refreshTrashPanes reloads every recycle bin pane.
 func (a *App) refreshTrashPanes() {
-	for _, t := range a.tabs {
-		for _, p := range t.Panes {
-			if p.Virtual == virtualTrash {
-				a.loadVirtual(p)
-			}
+	for _, p := range a.allPanes() {
+		if p.Virtual == virtualTrash {
+			a.loadVirtual(p)
 		}
 	}
 }
@@ -668,21 +666,17 @@ func (a *App) duplicateEntry(p *Pane, e fsx.Entry) {
 // refreshPanesAt reloads panes showing a folder.
 func (a *App) refreshPanesAt(path string) {
 	clean := filepath.Clean(path)
-	for _, t := range a.tabs {
-		for _, p := range t.Panes {
-			if p.Virtual == virtualNone && filepath.Clean(p.Path) == clean {
-				a.refreshPane(p)
-			}
+	for _, p := range a.allPanes() {
+		if p.Virtual == virtualNone && filepath.Clean(p.Path) == clean {
+			a.refreshPane(p)
 		}
 	}
 }
 
 // refreshAllPanes reloads every pane.
 func (a *App) refreshAllPanes() {
-	for _, t := range a.tabs {
-		for _, p := range t.Panes {
-			a.refreshPane(p)
-		}
+	for _, p := range a.allPanes() {
+		a.refreshPane(p)
 	}
 }
 
@@ -852,11 +846,9 @@ func (a *App) setTag(paths []string, id string) {
 		}
 	}
 	a.saveSessionSoon()
-	for _, t := range a.tabs {
-		for _, p := range t.Panes {
-			if p.Virtual == virtualTag {
-				a.loadVirtual(p)
-			}
+	for _, p := range a.allPanes() {
+		if p.Virtual == virtualTag {
+			a.loadVirtual(p)
 		}
 	}
 	if id == "" {
@@ -947,11 +939,9 @@ func (a *App) deleteTag(id string) {
 		}
 	}
 	a.saveSessionSoon()
-	for _, t := range a.tabs {
-		for _, p := range t.Panes {
-			if p.Virtual == virtualTag {
-				a.loadVirtual(p)
-			}
+	for _, p := range a.allPanes() {
+		if p.Virtual == virtualTag {
+			a.loadVirtual(p)
 		}
 	}
 }
@@ -975,13 +965,12 @@ func (a *App) saveTagEdits() {
 	a.tags.Open = false
 }
 
-// startFolderCompare compares the two panes of the active tab.
+// startFolderCompare compares the active tabs of both sides.
 func (a *App) startFolderCompare() {
-	t := a.activeTab()
-	if t == nil || len(t.Panes) < 2 {
+	left, right := a.sidePane(0), a.sidePane(1)
+	if left == nil || right == nil {
 		return
 	}
-	left, right := t.Panes[0], t.Panes[1]
 	if left.Virtual != virtualNone || right.Virtual != virtualNone {
 		return
 	}
